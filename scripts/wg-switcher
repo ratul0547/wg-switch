@@ -1,0 +1,89 @@
+#!/bin/bash
+
+CONFIG_DIR="/etc/wireguard/configs"
+WG_IF="wg0"
+WG_CONF="/etc/wireguard/${WG_IF}.conf"
+
+# Relaunch with sudo if not root
+if [[ $EUID -ne 0 ]]; then
+   exec sudo "$0" "$@"
+fi
+
+# Determine current active config
+if [ -L "$WG_CONF" ]; then
+    CURRENT_CONF=$(basename "$(readlink -f "$WG_CONF")")
+else
+    CURRENT_CONF=""
+fi
+
+# Get current external IP + location info
+get_ip_info() {
+    local ip country city
+    ip=$(curl -s https://ifconfig.co/ip || echo "Unavailable")
+    country=$(curl -s https://ifconfig.co/country || echo "Unknown")
+    city=$(curl -s https://ifconfig.co/city || echo "Unknown")
+    echo "$ip ($city, $country)"
+}
+CURRENT_IP=$(get_ip_info)
+
+# Dialog menu options from config files
+OPTIONS=()
+i=1
+for conf in "$CONFIG_DIR"/*.conf; do
+    name=$(basename "$conf")
+    # mark the current active config
+    if [[ "$name" == "$CURRENT_CONF" ]]; then
+        display_name="$name ✅"
+    else
+        display_name="$name"
+    fi
+    OPTIONS+=($i "$display_name")
+    ((i++))
+done
+
+if [ ${#OPTIONS[@]} -eq 0 ]; then
+    echo "No configs found in $CONFIG_DIR"
+    exit 1
+fi
+
+# Run dialog menu
+CHOICE=$(dialog --clear \
+                --backtitle "WireGuard Config Switcher" \
+                --title "Select VPN Config" \
+                --menu "Current config: $CURRENT_CONF\nCurrent external IP: $CURRENT_IP\nChoose a config to activate:" 20 70 10 \
+                "${OPTIONS[@]}" \
+                2>&1 >/dev/tty)
+
+clear
+
+if [ -z "$CHOICE" ]; then
+    echo "Cancelled."
+    exit 0
+fi
+
+# Map numeric choice to actual filename
+SELECTED="${OPTIONS[$((CHOICE*2-1))]}"
+# Remove the checkmark if it exists
+SELECTED=${SELECTED//✅/}
+NEWCONF="$CONFIG_DIR/$SELECTED"
+
+echo "Switching to $SELECTED..."
+
+# Bring down old wg0 if active
+wg-quick down $WG_IF 2>/dev/null
+
+# Replace symlink
+rm -f "$WG_CONF"
+ln -s "$NEWCONF" "$WG_CONF"
+
+# Bring it up
+wg-quick up $WG_IF
+STATUS=$?
+
+if [ $STATUS -eq 0 ]; then
+    NEW_IP=$(get_ip_info)
+    echo "WireGuard switched to $SELECTED successfully."
+    echo "New external IP: $NEW_IP"
+else
+    echo "Failed to bring up WireGuard with $SELECTED"
+fi

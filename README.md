@@ -7,8 +7,13 @@ requires sudo (for wireguard)
 - Show current IP address, location and config name
 - CLI interface provided by dialog
   
-# dependencies
+# Dependencies
 - wg-quick
 - curl
 - dialog
 
+# Additional tool
+- `whatismyip` to check the current IP of the client device
+
+# Usage
+First set executable permissions with `chmod +x wg-switch` and run `./wg-switch`. Or, copy the files from the scripts directory to a valid $PATH, and set permissions and use from terminal.

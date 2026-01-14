@@ -19,9 +19,9 @@ fi
 # Get current external IP + location info
 get_ip_info() {
     local ip country city
-    ip=$(curl -s https://ifconfig.co/ip || echo "Unavailable")
-    country=$(curl -s https://ifconfig.co/country || echo "Unknown")
-    city=$(curl -s https://ifconfig.co/city || echo "Unknown")
+    ip=$(curl -m 3 -s https://ifconfig.co/ip || echo "Unavailable")
+    country=$(curl -m 3 -s https://ifconfig.co/country || echo "Unknown")
+    city=$(curl -m 3 -s https://ifconfig.co/city || echo "Unknown")
     echo "$ip ($city, $country)"
 }
 CURRENT_IP=$(get_ip_info)
